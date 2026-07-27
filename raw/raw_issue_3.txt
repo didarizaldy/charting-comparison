@@ -1,0 +1,26 @@
+buatkan `issue_3.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. membuat logic apps untuk `main.py`.
+2. untuk menjalankan program ini dibutuhkan beberapa parameter yang nantinya akan didetailkan pada deskripsi.
+3. database pada `main.py` sudah dibuat yaitu dengan database `stock_data` dan nama table `stock_data`.
+4. lakukan simulasi dan juga baca terlebih dahulu structure table pada `stock_data`.
+
+project ini ditujukan untuk mengimplementasikan planning dengan logic apps :
+1. membaca inputan sesuai dengan parameter yang input.
+2. apabila data belum tersedia pada database maka lakukan fetch data pada yahoo finance.
+3. apabila data sudah tersedia maka ambil data tersebut dari database.
+4. visualisasikan output berupa line-chart `.png` dan juga animation `.mp4`. chart merupakan comparing data ticker satu sama lainnya sehingga tentu pada visualisanya setiap ticker mempunyai warna yang berbeda 
+
+ketika user menjalankan program dengan :
+- `main.py -t {{ $ticker $ticker $ticker ... }} -d {{ start_date_range end_date_range }}`. contoh : `main.py -t ^JKSE GF=F BTC-USD -d 01/07/2026 23/07/2026`. maka program fetch data ke yahoo finance berdasarkan range date yang diinput sesuai dengan ticker yang diinputkan dan menyimpannya ke dalam table `stock_list`. kemudian memvisualisasikannya ke dalam bentuk `.png` serta animation `.mp4` berdasarkan `chart.py`
+- `main.py -t {{ $ticker $ticker $ticker ... }} -i {{ interval hari }}`. contoh : `main.py -t BTC-USD BBCA GOTO -i 5`. maka program fetch data ke yahoo finance berdasarkan interval x hari kebelakang yang diinputkan sesuai dengan ticker yang diinputkan dan menyimpannya ke dalam table `stock_list`. kemudian memvisualisasikannya ke dalam bentuk `.png` serta animation `.mp4` berdasarkan `chart.py`.
+- `main.py -t {{ $ticker $ticker $ticker ... }} -p {{ interval periode }}`. contoh : `main.py -t ETH-USD SILVER TLKM -p 1mo`. maka program fetch data ke yahoo finance sesuai dengan ticker yang diinputkan dan menyimpannya ke dalam table `stock_list`. kemudian memvisualisasikannya ke dalam bentuk `.png` serta animation `.mp4` berdasarkan `chart.py`. untuk periode beragam seperti `{{ number }}mo` artinya hari, `{{ number }}d` artinya hari, `{{ number }}y` artinya tahun, ...
+
+structure folder di dalam `src`
+- service : ini berisikan file visualisasi tersebut
+
+structure file 
+- service : menggunakan format misal `controller.py`, `main.py`
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah

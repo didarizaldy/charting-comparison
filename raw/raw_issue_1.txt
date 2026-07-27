@@ -1,0 +1,33 @@
+buatkan `issue_1.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. Membuat project dengan python untuk memvisualisasikan data ticker dari yahoo finance berbentuk line-chart `.png` dan juga animation `.mp4`
+2. format `.png` untuk diupload ke sosial media dengan size 1920 x 1080 (lanscape).
+3. format `.mp4` untuk diupload ke sosial media dengan size 1080 x 1920 (vertical) atau fit to size untuk konten video di tiktok dan juga reels maupun shorts youtube.
+4. untuk visualisasi chart theme mengikuti dengan detail yang dilampirkan pada deskripsi.
+
+project ini ditujukan sebagai awal apps sehingga tidak perlu melakukan logic pada appsnya terlebih dahulu. 
+
+project ini memvisualisasikan seperti :
+- Dark Theme (#0f172a)
+- Font size = 11
+- Text center
+- Text center berupa `$ticker, $ticker, $ticker\nTanggal dinamis mengikuti tanggal chartnya\n{{ nama $ticker yang lead }}`
+- Dalam chart tersebut sebelah kiri berisikan Harganya (Sudah dikonversi IDR secara realtime). Sehingga ketika program dijalankan selalu mengambil data IDR terbaru.
+- Dalam chart tersebut sebelah bawah berisikan periode tetapi dalam format `Bulan Tahun`, contoh = `Juni 2026`. Jika tahun periode sama maka tahun tidak dimunculkan hanya `Bulan` saja, contoh = `Juni`. Tetapi jika chart memunculkan tahun maka `Bulan Tahun`, contoh = `Juni 2026`.
+- Area fill transparan di bawah garis (fill_between)
+- Marker lebih besar
+- Grid cukup jelas tetapi tidak bold
+- Spine lebih tipis
+- Semua text putih
+- Legend dark glass style
+- Glow effect (double plot dengan alpha)
+- Nilai terakhir diberi warna sesuai garis
+
+structure folder di dalam `src`
+- service : ini berisikan file visualisasi tersebut
+
+structure file 
+- service : menggunakan format misal `chart.py`
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah

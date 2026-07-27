@@ -1,0 +1,16 @@
+buatkan `issue_2.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. enhance visual chart
+
+project ini ditujukan untuk enhance visualisasi chart :
+- semua visualisasi chart dimulai dari angka 0. sehingga apabila data yang ingin ditampilkan yaitu 13/07/2026 maka tanggal mulai ditampilkan pada 12/07/2026 dengan dimulai pada angka 0 baik itu untuk X dan juga Y.
+- semua visualisasi chart menggunakan angka pasti bukan angka yang disingkat. contoh = `Rp 2.304.299`.
+- semua visualisasi chart pada Y (nilai harga angka) menggunakan 1 digit angka seperti `X`. contoh = `Rp 2 juta`, bukan `Rp 2.0 juta`.
+- visualisasi chart khusus `.mp4` chart yang ditampilkan jangan sampai terpotong, agak sedikit di zoomout agar bagian X dan juga Y serta final pricenya terlihat.
+- visualisasi chart khusus `.mp4` menampilkan pergerakan `harga` + `%change` dengan round box dan warna yang sesuai untuk masing-masing ticker.
+- visualisasi chart khusus `.mp4` menampilkan text di tengah (center) = `$ticker $ticker ...\n{{ Tanggal chart bergerak }}\n{{ nama $ticker yang unggul }}(berwarna hijau dan dalam round box) {{ nama $ticker yang low }}(berwarna merah dan dalam round box)`.
+
+output : enhance visualisasi chart
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah
