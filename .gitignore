@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables (credentials)
+.env
+.env.*
+
+# Database
+data/*.db
+
+# Output files (generated charts)
+output/*.png
+output/*.mp4
+output/*.gif
+!output/.gitkeep
+
+# Debug files
+debug_output.txt
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Jupyter
+.ipynb_checkpoints/
