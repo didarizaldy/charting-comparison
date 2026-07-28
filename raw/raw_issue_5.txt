@@ -1,0 +1,17 @@
+buatkan `issue_5.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. enhance visualisasi animation chart `.mp4`.
+
+project ini ditujukan untuk enhance visualisasi animation chart `.mp4` :
+1. nama ticker yang terdapat `.JK` hilangkan saja pada visualisasi chart.
+2. kembalikan visualisai chart sebelumnya dimana menampilan semua daftar ticker.
+3. apabila nama ticker > 3, maka hanya tampilkan top 3 leading dan dinamis sesuai dengan pergerakan chartnya. HANYA TEKS YANG DIATAS!! BUKAN BERARTI MENGHILANGKAN SEMUA TICKER PADA CHART!!
+4. untuk top leading profit dibagian kanan atas apabila hasilnya tetap minus `-`, maka hilangkan `+`nya
+5. cek kembali dan perbaiki untuk data last daynya karna apabila aku menginputkan kembali tanggal terakhirnya tidak muncul seperti `python src/main.py -t TPIA.JK ^JKSE BRPT.JK BUVA.JK TLKM.JK BMRI.JK BUMI.JK BULL.JK -d 14/07/2026 28/07/2026` yang muncul justru tanggal 27/07/2026
+
+output : enchange visualisasi dan fixing
+
+response : fixing and enhance
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah

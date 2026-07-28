@@ -31,6 +31,9 @@ project-root/
 
 ## 3. Database Specification & Inspection
 Sebelum mengimplementasikan logika penarikan data, lakukan verifikasi struktur tabel terlebih dahulu.
+* **Table access** :
+* `user` : root
+* `pass` : root
 
 ### 3.1 Identifikasi Database & Tabel
 * **Database Name**: `stock_data`

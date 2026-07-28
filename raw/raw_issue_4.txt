@@ -1,0 +1,15 @@
+buatkan `issue_4.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. enhance visualisasi animation chart `.mp4`.
+
+project ini ditujukan untuk enhance visualisasi animation chart `.mp4` :
+1. nama ticker tidak dimulai dengan `$`.
+2. apabila nama ticker > 3, maka hanya tampilkan top 3 leading dan dinamis sesuai dengan pergerakan chartnya
+3. saat ini X axis menampilkan tanggal juga bulan ketika berbeda periode. sekarang ubah menjadi hanya menampilkan bulannya saja tanpa tanggal. dan simulasikan ketika bulan-bulan dan juga tahun-tahun.
+
+output : enchange visualisasi
+
+response : -
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah
