@@ -101,28 +101,52 @@ def run(
     print("\n-- Initialising database --")
     db.init_db()
 
-    # -- Step 3: For each ticker, check DB -> fetch -> save --
+    # -- Step 3: For each ticker, check DB -> fetch (partial if needed) -> save --
     print("\n-- Checking / fetching data --")
     usd_to_idr = None  # Lazy-initialised (only fetched if needed)
 
     for ticker in tickers:
         print(f"\n[{ticker}]")
 
-        # 3a. Check if data already exists in DB
+        # 3a. Check if data already exists in DB (full range)
         if db.check_data_completeness(ticker, start_date, end_date):
-            print(f"  >> Using cached data from database")
+            print(f"  >> Data lengkap di database — menggunakan cache")
             continue
 
-        # 3b. Fetch from Yahoo Finance
-        print(f"  >> Fetching from Yahoo Finance...")
-        yf_df = yahoo_service.fetch_yfinance_data(ticker, start_date, end_date)
+        # 3b. Check for partial data in DB
+        existing_df = db.get_stock_data(ticker, start_date, end_date)
+        if not existing_df.empty:
+            # Partial data exists — fetch only the missing date ranges
+            print(f"  >> Data parsial ditemukan ({len(existing_df)} rows), mencari tanggal yang kurang...")
+            missing_ranges = db.find_missing_date_ranges(existing_df, start_date, end_date)
 
-        if yf_df.empty:
-            print(f"  >> WARNING: No data available for {ticker}")
-            continue
+            if missing_ranges:
+                for miss_start, miss_end in missing_ranges:
+                    print(f"  >> Fetch missing range: {miss_start} to {miss_end}")
+                    partial_df = yahoo_service.fetch_yfinance_data(ticker, miss_start, miss_end)
+                    if not partial_df.empty:
+                        db.save_stock_data(partial_df, ticker)
+                        print(f"  >> Saved {len(partial_df)} rows for missing range")
+                    else:
+                        print(f"  >> WARNING: No data returned for missing range {miss_start} to {miss_end}")
+            else:
+                print(f"  >> No missing ranges detected — data should be complete")
+        else:
+            # 3c. No data at all — fetch full range from Yahoo Finance
+            print(f"  >> Tidak ada data di DB — fetch dari Yahoo Finance...")
+            yf_df = yahoo_service.fetch_yfinance_data(ticker, start_date, end_date)
 
-        # 3c. Save to database
-        db.save_stock_data(yf_df, ticker)
+            if yf_df.empty:
+                print(f"  >> WARNING: Tidak ada data untuk {ticker}")
+                continue
+
+            # Validate: confirm data covers the requested date range
+            fetched_start = yf_df['Date'].min().strftime('%Y-%m-%d')
+            fetched_end = yf_df['Date'].max().strftime('%Y-%m-%d')
+            print(f"  >> Rentang data: {fetched_start} -> {fetched_end}")
+
+            # 3d. Save to database
+            db.save_stock_data(yf_df, ticker)
 
     # -- Step 4: Load all data from DB --
     print("\n-- Loading data from database --")

@@ -1,31 +1,35 @@
 """
 Database module for stock data storage and retrieval.
-Uses SQLite as the database engine.
+Uses MySQL as the database engine.
 
 Table: stock_data
 Columns: symbol, date, open, previous_close, high, low, close, volume,
          created_at, created_by, updated_at, updated_by
 """
 
-import sqlite3
-import pandas as pd
 import os
-from datetime import datetime
-from typing import Optional
+import mysql.connector
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from typing import Optional, List, Tuple
+from dotenv import load_dotenv
 
-# Database file path (relative to project root)
-DB_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
-DB_PATH = os.path.join(DB_DIR, "stock_data.db")
+# Load .env from project root
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
 # Created/updated metadata
 SYSTEM_USER = "yahoo_api"
 
 
-def _get_connection() -> sqlite3.Connection:
-    """Get a connection to the SQLite database. Creates data directory if needed."""
-    os.makedirs(DB_DIR, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL;")
+def _get_connection() -> mysql.connector.MySQLConnection:
+    """Get a connection to the MySQL database."""
+    conn = mysql.connector.connect(
+        host=os.getenv('MYSQL_HOST', 'localhost'),
+        user=os.getenv('MYSQL_USER', 'root'),
+        password=os.getenv('MYSQL_PASSWORD', 'root'),
+        database=os.getenv('MYSQL_DATABASE', 'stock_data'),
+    )
     return conn
 
 
@@ -39,48 +43,42 @@ def init_db() -> None:
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS stock_data (
-            id              INTEGER PRIMARY KEY AUTOINCREMENT,
-            symbol          TEXT    NOT NULL,
-            date            DATE    NOT NULL,
-            open            REAL,
-            previous_close  REAL,
-            high            REAL,
-            low             REAL,
-            close           REAL,
-            volume          REAL,
-            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            created_by      TEXT    DEFAULT 'yahoo_api',
-            updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_by      TEXT    DEFAULT 'yahoo_api',
+            id              INT PRIMARY KEY AUTO_INCREMENT,
+            symbol          VARCHAR(50)  NOT NULL,
+            date            DATE         NOT NULL,
+            open            DECIMAL(20,4),
+            previous_close  DECIMAL(20,4),
+            high            DECIMAL(20,4),
+            low             DECIMAL(20,4),
+            close           DECIMAL(20,4),
+            volume          DECIMAL(20,4),
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by      VARCHAR(100) DEFAULT 'yahoo_api',
+            updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            updated_by      VARCHAR(100) DEFAULT 'yahoo_api',
             UNIQUE(symbol, date)
         )
     """)
 
-    # Create index for faster lookups
-    cursor.execute("""
-        CREATE INDEX IF NOT EXISTS idx_stock_data_symbol_date
-        ON stock_data(symbol, date)
-    """)
-
     conn.commit()
     conn.close()
-    print(f"Database initialized at: {DB_PATH}")
+    print("Database initialized: MySQL stock_data")
 
 
 def inspect_table() -> None:
     """Print the table schema for debugging/verification purposes."""
     conn = _get_connection()
     cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(stock_data);")
+    cursor.execute("SHOW COLUMNS FROM stock_data")
     columns = cursor.fetchall()
     conn.close()
 
     print("\n=== Table: stock_data ===")
-    print(f"{'CID':<5} {'Name':<20} {'Type':<15} {'NotNull':<8} {'Default':<20} {'PK':<5}")
-    print("-" * 75)
+    print(f"{'Field':<20} {'Type':<20} {'Null':<8} {'Key':<8} {'Default':<20} {'Extra':<20}")
+    print("-" * 95)
     for col in columns:
-        cid, name, col_type, notnull, default, pk = col
-        print(f"{cid:<5} {name:<20} {col_type:<15} {notnull:<8} {str(default):<20} {pk:<5}")
+        field, col_type, null, key, default, extra = col
+        print(f"{field:<20} {str(col_type):<20} {null:<8} {key:<8} {str(default):<20} {extra:<20}")
 
 
 def get_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -99,7 +97,7 @@ def get_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     query = """
         SELECT symbol, date, open, previous_close, high, low, close, volume
         FROM stock_data
-        WHERE symbol = ? AND date >= ? AND date <= ?
+        WHERE symbol = %s AND date >= %s AND date <= %s
         ORDER BY date ASC
     """
     df = pd.read_sql_query(query, conn, params=(ticker, start_date, end_date))
@@ -114,6 +112,8 @@ def get_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
 def check_data_completeness(ticker: str, start_date: str, end_date: str) -> bool:
     """
     Check if data for the given ticker and date range is already stored in DB.
+    Uses business-day calculation to determine expected data count, then
+    compares against actual DB rows.
 
     Args:
         ticker: Stock ticker symbol
@@ -121,35 +121,46 @@ def check_data_completeness(ticker: str, start_date: str, end_date: str) -> bool
         end_date: End date in 'YYYY-MM-DD' format
 
     Returns:
-        True if data exists for the full range, False otherwise
+        True if data exists for the full range (within tolerance), False otherwise
     """
     df = get_stock_data(ticker, start_date, end_date)
     if df.empty:
         return False
 
-    # Check if we have data spanning the requested range
-    db_min = df['date'].min()
-    db_max = df['date'].max()
-    from datetime import datetime as dt
-    req_start = dt.strptime(start_date, '%Y-%m-%d')
-    req_end = dt.strptime(end_date, '%Y-%m-%d')
+    # Calculate expected number of business days in the requested range
+    start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+    end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+    expected_days = int(np.busday_count(start_dt.date(), (end_dt + timedelta(days=1)).date()))
 
-    # End date must be strictly covered — no tolerance. If the DB is missing
-    # the last requested day, we must re-fetch so the chart ends on the
-    # correct date.
-    from datetime import timedelta
-    start_tolerance = timedelta(days=3)
+    # Count unique dates in DB for this range
+    db_dates = pd.to_datetime(df['date']).dt.date
+    unique_dates = set(db_dates)
+    actual_days = len(unique_dates)
 
-    has_enough = (db_min <= req_start + start_tolerance) and (db_max >= req_end)
-    if has_enough:
-        print(f"  DB check [{ticker}]: data found ({len(df)} rows, {db_min.strftime('%Y-%m-%d')} to {db_max.strftime('%Y-%m-%d')})")
-    return has_enough
+    # Tolerance: allow up to 3 missing days (unexpected market holidays, etc.)
+    tolerance = 3
+    missing_days = expected_days - actual_days
+    is_complete = missing_days <= tolerance
+
+    if is_complete:
+        db_min = df['date'].min()
+        db_max = df['date'].max()
+        print(f"  DB check [{ticker}]: data found ({actual_days}/{expected_days} business days, "
+              f"{db_min.strftime('%Y-%m-%d')} to {db_max.strftime('%Y-%m-%d')})")
+    else:
+        print(f"  DB check [{ticker}]: incomplete ({actual_days}/{expected_days} business days, "
+              f"missing {missing_days} days)")
+
+    return is_complete
 
 
 def save_stock_data(df: pd.DataFrame, ticker: str) -> int:
     """
-    Save stock data DataFrame to the database.
-    Uses INSERT OR IGNORE to avoid duplicate entries (based on UNIQUE(symbol, date)).
+    Save stock data DataFrame to the database using UPSERT logic.
+    - If a row for (symbol, date) does NOT exist → INSERT.
+    - If a row for (symbol, date) ALREADY exists → UPDATE (so data can be refreshed).
+
+    Validates that required columns exist and rows are non-empty before saving.
 
     Args:
         df: DataFrame with columns matching yfinance output:
@@ -158,35 +169,43 @@ def save_stock_data(df: pd.DataFrame, ticker: str) -> int:
         ticker: The ticker symbol to associate with this data
 
     Returns:
-        Number of rows inserted (excluding duplicates)
+        Number of rows inserted or updated
     """
     if df.empty:
         print(f"  No data to save for {ticker}")
         return 0
 
-    conn = _get_connection()
-    cursor = conn.cursor()
-    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    rows_inserted = 0
-
-    # Normalize column names (handle both yfinance raw and pre-formatted)
+    # ── Validation: required columns ──────────────────────────────────
     col_map = {}
     for col in df.columns:
         col_lower = col.lower()
-        if col_lower in ('date',):
+        if col_lower == 'date':
             col_map['date'] = col
-        elif col_lower in ('open',):
+        elif col_lower == 'open':
             col_map['open'] = col
-        elif col_lower in ('high',):
+        elif col_lower == 'high':
             col_map['high'] = col
-        elif col_lower in ('low',):
+        elif col_lower == 'low':
             col_map['low'] = col
-        elif col_lower in ('close',):
+        elif col_lower == 'close':
             col_map['close'] = col
-        elif col_lower in ('volume',):
+        elif col_lower == 'volume':
             col_map['volume'] = col
 
-    # Calculate previous_close from close prices shifted by 1
+    if 'date' not in col_map:
+        print(f"  ERROR: DataFrame for {ticker} has no 'date'/'Date' column — cannot save")
+        return 0
+
+    if 'close' not in col_map:
+        print(f"  ERROR: DataFrame for {ticker} has no 'close'/'Close' column — cannot save")
+        return 0
+
+    # ── Upsert logic ─────────────────────────────────────────────────
+    conn = _get_connection()
+    cursor = conn.cursor()
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    rows_affected = 0
+
     close_series = df[col_map['close']].values if 'close' in col_map else [None] * len(df)
 
     for idx in range(len(df)):
@@ -198,12 +217,12 @@ def save_stock_data(df: pd.DataFrame, ticker: str) -> int:
             if hasattr(date_val, 'strftime'):
                 date_str = date_val.strftime('%Y-%m-%d')
             else:
-                date_str = str(date_val)[:10]
+                date_str = str(pd.to_datetime(date_val).strftime('%Y-%m-%d'))
         else:
             continue
 
         # Previous close is the close of the prior row
-        prev_close = float(close_series[idx - 1]) if idx > 0 and close_series[idx - 1] is not None else None
+        prev_close = float(close_series[idx - 1]) if idx > 0 and pd.notna(close_series[idx - 1]) else None
 
         open_val = float(row[col_map['open']]) if 'open' in col_map and pd.notna(row[col_map['open']]) else None
         high_val = float(row[col_map['high']]) if 'high' in col_map and pd.notna(row[col_map['high']]) else None
@@ -213,29 +232,37 @@ def save_stock_data(df: pd.DataFrame, ticker: str) -> int:
 
         try:
             cursor.execute("""
-                INSERT OR IGNORE INTO stock_data
+                INSERT INTO stock_data
                     (symbol, date, open, previous_close, high, low, close, volume,
                      created_at, created_by, updated_at, updated_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    open = VALUES(open),
+                    previous_close = VALUES(previous_close),
+                    high = VALUES(high),
+                    low = VALUES(low),
+                    close = VALUES(close),
+                    volume = VALUES(volume),
+                    updated_at = VALUES(updated_at),
+                    updated_by = VALUES(updated_by)
             """, (
                 ticker, date_str, open_val, prev_close,
                 high_val, low_val, close_val, volume_val,
-                now, SYSTEM_USER, now, SYSTEM_USER
+                now, SYSTEM_USER, now, SYSTEM_USER,
             ))
-            if cursor.rowcount > 0:
-                rows_inserted += 1
+            rows_affected += 1
         except Exception as e:
-            print(f"  Error inserting row for {ticker} on {date_str}: {e}")
+            print(f"  Error saving row for {ticker} on {date_str}: {e}")
 
     conn.commit()
     conn.close()
 
-    if rows_inserted > 0:
-        print(f"  Saved {rows_inserted} new rows for {ticker} to database")
+    if rows_affected > 0:
+        print(f"  Saved {rows_affected} rows for {ticker} (upsert)")
     else:
-        print(f"  No new rows to insert for {ticker} (all duplicates)")
+        print(f"  No rows saved for {ticker}")
 
-    return rows_inserted
+    return rows_affected
 
 
 def get_distinct_dates(ticker: str) -> list:
@@ -243,9 +270,71 @@ def get_distinct_dates(ticker: str) -> list:
     conn = _get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT DISTINCT date FROM stock_data WHERE symbol = ? ORDER BY date",
+        "SELECT DISTINCT date FROM stock_data WHERE symbol = %s ORDER BY date",
         (ticker,)
     )
     dates = [row[0] for row in cursor.fetchall()]
     conn.close()
     return dates
+
+
+def find_missing_date_ranges(
+    existing_df: pd.DataFrame,
+    start_date: str,
+    end_date: str,
+) -> List[Tuple[str, str]]:
+    """
+    Detect date ranges that are missing from existing DB data.
+
+    Compares the full calendar range [start_date, end_date] against the dates
+    present in *existing_df* and returns contiguous gaps as (gap_start, gap_end)
+    pairs suitable for passing to fetch_yfinance_data().
+
+    Args:
+        existing_df: DataFrame with at least a 'date' column (from get_stock_data).
+        start_date:  Requested start date 'YYYY-MM-DD'.
+        end_date:    Requested end date 'YYYY-MM-DD'.
+
+    Returns:
+        List of (missing_start, missing_end) tuples in 'YYYY-MM-DD' format.
+        Empty list if no gaps are found.
+    """
+    # Build set of dates already in DB
+    existing_dates = set(pd.to_datetime(existing_df['date']).dt.date)
+
+    # Build full calendar range (every day, not just business days)
+    start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+    end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+
+    all_dates = []
+    current = start_dt
+    while current <= end_dt:
+        all_dates.append(current)
+        current += timedelta(days=1)
+
+    # Walk through the calendar and collect contiguous gaps
+    missing_ranges: List[Tuple[str, str]] = []
+    in_gap = False
+    gap_start = None
+
+    for d in all_dates:
+        if d not in existing_dates:
+            if not in_gap:
+                gap_start = d
+                in_gap = True
+        else:
+            if in_gap:
+                missing_ranges.append((
+                    gap_start.strftime('%Y-%m-%d'),
+                    (d - timedelta(days=1)).strftime('%Y-%m-%d'),
+                ))
+                in_gap = False
+
+    # Handle trailing gap
+    if in_gap:
+        missing_ranges.append((
+            gap_start.strftime('%Y-%m-%d'),
+            end_dt.strftime('%Y-%m-%d'),
+        ))
+
+    return missing_ranges
