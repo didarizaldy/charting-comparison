@@ -42,13 +42,21 @@ def build_parser() -> argparse.ArgumentParser:
         description='Multi-ticker stock/asset comparison visualizer with DB caching.',
     )
 
-    # ── Tickers (required) ────────────────────────────────────────────
-    parser.add_argument(
+    # ── Tickers OR IHSP mode (mutually exclusive) ────────────────────
+    ticker_group = parser.add_mutually_exclusive_group(required=True)
+
+    ticker_group.add_argument(
         '-t', '--tickers',
         nargs='+',
-        required=True,
         metavar='TICKER',
         help='One or more ticker symbols (e.g., BTC-USD BBCA.JK ^JKSE)',
+    )
+
+    ticker_group.add_argument(
+        '-x', '--ihsp',
+        action='store_true',
+        help='Mode IHSP: visualisasi IHSP (^PEARL) vs IHSG (^JKSE) '
+             'menggunakan seluruh data di database (kecuali ^JKSE)',
     )
 
     # ── Mutually exclusive date-range modes ───────────────────────────
@@ -106,9 +114,13 @@ def main() -> None:
         parser.error("You must specify one of: -d, -i, or -p")
         return
 
+    # Determine if IHSP mode is active
+    is_ihsp_mode = args.ihsp
+
     # Run the controller pipeline
     controller.run(
-        tickers=args.tickers,
+        tickers=args.tickers if not is_ihsp_mode else None,
+        is_ihsp_mode=is_ihsp_mode,
         date_mode=date_mode,
         date_start=date_start,
         date_end=date_end,

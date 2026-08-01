@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".env"))
 
 # Created/updated metadata
-SYSTEM_USER = "yahoo_api"
+SYSTEM_USER = "API_YAHOO"
 
 
 def _get_connection() -> mysql.connector.MySQLConnection:
@@ -53,16 +53,68 @@ def init_db() -> None:
             close           DECIMAL(20,4),
             volume          DECIMAL(20,4),
             created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-            created_by      VARCHAR(100) DEFAULT 'yahoo_api',
+            created_by      VARCHAR(100) DEFAULT 'API_YAHOO',
             updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            updated_by      VARCHAR(100) DEFAULT 'yahoo_api',
+            updated_by      VARCHAR(100) DEFAULT 'API_YAHOO',
             UNIQUE(symbol, date)
         )
     """)
 
     conn.commit()
+
+    # Add changes column if not exists
+    try:
+        cursor.execute("""
+            ALTER TABLE stock_data
+            ADD COLUMN changes DECIMAL(10,4) DEFAULT NULL
+            AFTER volume
+        """)
+        conn.commit()
+    except Exception:
+        pass  # Column already exists — skip
+
     conn.close()
     print("Database initialized: MySQL stock_data")
+
+
+def init_simulate_table() -> None:
+    """Create the stock_simulate_data table if it does not already exist."""
+    conn = _get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS stock_simulate_data (
+            id              INT PRIMARY KEY AUTO_INCREMENT,
+            symbol          VARCHAR(50)  NOT NULL,
+            date            DATE         NOT NULL,
+            open            DECIMAL(20,4),
+            previous_close  DECIMAL(20,4),
+            high            DECIMAL(20,4),
+            low             DECIMAL(20,4),
+            close           DECIMAL(20,4),
+            volume          DECIMAL(20,4),
+            created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_by      VARCHAR(100) DEFAULT 'system',
+            updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            updated_by      VARCHAR(100) DEFAULT 'system',
+            UNIQUE(symbol, date)
+        )
+    """)
+
+    # Add changes column if not exists
+    try:
+        cursor.execute("""
+            ALTER TABLE stock_simulate_data
+            ADD COLUMN changes DECIMAL(10,4) DEFAULT NULL
+            AFTER volume
+        """)
+        conn.commit()
+    except Exception:
+        pass  # Column already exists — skip
+
+    conn.commit()
+    conn.close()
+    print("Database initialized: MySQL stock_simulate_data")
 
 
 def inspect_table() -> None:
@@ -95,7 +147,7 @@ def get_stock_data(ticker: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
     conn = _get_connection()
     query = """
-        SELECT symbol, date, open, previous_close, high, low, close, volume
+        SELECT symbol, date, open, previous_close, high, low, close, volume, changes
         FROM stock_data
         WHERE symbol = %s AND date >= %s AND date <= %s
         ORDER BY date ASC
@@ -230,12 +282,18 @@ def save_stock_data(df: pd.DataFrame, ticker: str) -> int:
         close_val = float(row[col_map['close']]) if 'close' in col_map and pd.notna(row[col_map['close']]) else None
         volume_val = float(row[col_map['volume']]) if 'volume' in col_map and pd.notna(row[col_map['volume']]) else None
 
+        # Calculate changes: % change from previous close (rounded to 2 decimals)
+        if prev_close is not None and prev_close != 0 and close_val is not None:
+            changes_val = round(((close_val - prev_close) / prev_close) * 100, 2)
+        else:
+            changes_val = None
+
         try:
             cursor.execute("""
                 INSERT INTO stock_data
-                    (symbol, date, open, previous_close, high, low, close, volume,
+                    (symbol, date, open, previous_close, high, low, close, volume, changes,
                      created_at, created_by, updated_at, updated_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     open = VALUES(open),
                     previous_close = VALUES(previous_close),
@@ -243,11 +301,12 @@ def save_stock_data(df: pd.DataFrame, ticker: str) -> int:
                     low = VALUES(low),
                     close = VALUES(close),
                     volume = VALUES(volume),
+                    changes = VALUES(changes),
                     updated_at = VALUES(updated_at),
                     updated_by = VALUES(updated_by)
             """, (
                 ticker, date_str, open_val, prev_close,
-                high_val, low_val, close_val, volume_val,
+                high_val, low_val, close_val, volume_val, changes_val,
                 now, SYSTEM_USER, now, SYSTEM_USER,
             ))
             rows_affected += 1
@@ -338,3 +397,250 @@ def find_missing_date_ranges(
         ))
 
     return missing_ranges
+
+
+# ---------------------------------------------------------------------------
+# IHSP (Indeks Harga Saham Pearl) — simulate table functions
+# ---------------------------------------------------------------------------
+
+def get_all_symbols_except_jkse() -> List[str]:
+    """
+    Ambil semua simbol unik dari tabel stock_list, kecuali '^JKSE'.
+
+    Returns:
+        List of ticker symbols (strings)
+    """
+    conn = _get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT DISTINCT symbol FROM stock_list WHERE symbol != '^JKSE' ORDER BY symbol"
+    )
+    symbols = [row[0] for row in cursor.fetchall()]
+    conn.close()
+    return symbols
+
+
+def get_all_stock_data_except_jkse(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Ambil data close price dari semua simbol di stock_list (kecuali ^JKSE)
+    dalam rentang tanggal, dengan JOIN ke stock_data.
+
+    Args:
+        start_date: Start date 'YYYY-MM-DD'
+        end_date:   End date 'YYYY-MM-DD'
+
+    Returns:
+        DataFrame dengan kolom: symbol, date, close (diurutkan berdasarkan date, symbol)
+    """
+    conn = _get_connection()
+    query = """
+        SELECT sd.symbol, sd.date, sd.close, sd.volume
+        FROM stock_data sd
+        INNER JOIN stock_list sl ON sd.symbol = sl.symbol
+        WHERE sl.symbol != '^JKSE'
+          AND sd.date >= %s AND sd.date <= %s
+        ORDER BY sd.date ASC, sd.symbol ASC
+    """
+    df = pd.read_sql_query(query, conn, params=(start_date, end_date))
+    conn.close()
+
+    if not df.empty:
+        df['date'] = pd.to_datetime(df['date'])
+
+    return df
+
+
+def save_simulate_data(df: pd.DataFrame, symbol: str) -> int:
+    """
+    Simpan data simulasi ke tabel stock_simulate_data (upsert).
+
+    Args:
+        df:     DataFrame dengan kolom minimal 'date' dan 'close'
+        symbol: Simbol custom (misal '^PEARL')
+
+    Returns:
+        Jumlah baris yang tersimpan
+    """
+    if df.empty:
+        return 0
+
+    conn = _get_connection()
+    cursor = conn.cursor()
+    now = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    rows_affected = 0
+
+    # Map columns
+    close_col = None
+    date_col = None
+    for col in df.columns:
+        if col.lower() == 'close':
+            close_col = col
+        elif col.lower() == 'date':
+            date_col = col
+
+    if date_col is None or close_col is None:
+        print(f"  ERROR: DataFrame missing 'date' or 'close' column — cannot save")
+        return 0
+
+    for idx in range(len(df)):
+        row = df.iloc[idx]
+
+        date_val = row[date_col]
+        if hasattr(date_val, 'strftime'):
+            date_str = date_val.strftime('%Y-%m-%d')
+        else:
+            date_str = str(pd.to_datetime(date_val).strftime('%Y-%m-%d'))
+
+        close_val = float(row[close_col]) if pd.notna(row[close_col]) else None
+
+        # Previous close is the close of the prior row
+        prev_close = float(df.iloc[idx - 1][close_col]) if idx > 0 and pd.notna(df.iloc[idx - 1][close_col]) else None
+
+        # Check for optional columns
+        open_val = float(row['open']) if 'open' in df.columns and pd.notna(row['open']) else None
+        high_val = float(row['high']) if 'high' in df.columns and pd.notna(row['high']) else None
+        low_val = float(row['low']) if 'low' in df.columns and pd.notna(row['low']) else None
+        volume_val = float(row['volume']) if 'volume' in df.columns and pd.notna(row['volume']) else None
+
+        # Calculate changes: use pre-computed value from DataFrame if available,
+        # otherwise fallback to % change from previous close (rounded to 2 decimals)
+        if 'changes' in df.columns:
+            raw = row['changes']
+            changes_val = float(round(raw, 2)) if pd.notna(raw) else None
+        elif prev_close is not None and prev_close != 0 and close_val is not None:
+            changes_val = round(((close_val - prev_close) / prev_close) * 100, 2)
+        else:
+            changes_val = None
+
+        try:
+            cursor.execute("""
+                INSERT INTO stock_simulate_data
+                    (symbol, date, open, previous_close, high, low, close, volume, changes,
+                     created_at, created_by, updated_at, updated_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    open = VALUES(open),
+                    previous_close = VALUES(previous_close),
+                    high = VALUES(high),
+                    low = VALUES(low),
+                    close = VALUES(close),
+                    volume = VALUES(volume),
+                    changes = VALUES(changes),
+                    updated_at = VALUES(updated_at),
+                    updated_by = VALUES(updated_by)
+            """, (
+                symbol, date_str, open_val, prev_close,
+                high_val, low_val, close_val, volume_val, changes_val,
+                now, 'system', now, 'system',
+            ))
+            rows_affected += 1
+        except Exception as e:
+            print(f"  Error saving simulate data for {symbol} on {date_str}: {e}")
+
+    conn.commit()
+    conn.close()
+
+    if rows_affected > 0:
+        print(f"  Saved {rows_affected} rows for {symbol} in stock_simulate_data")
+    return rows_affected
+
+
+def get_simulate_data(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Ambil data simulasi dari stock_simulate_data.
+
+    Args:
+        symbol:     Simbol custom (misal '^PEARL')
+        start_date: Start date 'YYYY-MM-DD'
+        end_date:   End date 'YYYY-MM-DD'
+
+    Returns:
+        DataFrame dengan kolom: symbol, date, open, previous_close, high, low, close, volume
+    """
+    conn = _get_connection()
+    query = """
+        SELECT symbol, date, open, previous_close, high, low, close, volume, changes
+        FROM stock_simulate_data
+        WHERE symbol = %s AND date >= %s AND date <= %s
+        ORDER BY date ASC
+    """
+    df = pd.read_sql_query(query, conn, params=(symbol, start_date, end_date))
+    conn.close()
+
+    if not df.empty:
+        df['date'] = pd.to_datetime(df['date'])
+
+    return df
+
+
+def calculate_and_save_ihsp(start_date: str, end_date: str) -> pd.DataFrame:
+    """
+    Hitung IHSP (Indeks Harga Saham Pearl) dengan rata-rata close price
+    seluruh simbol (kecuali ^JKSE) per tanggal, lalu simpan ke tabel
+    stock_simulate_data dengan simbol '^PEARL'.
+
+    Rumus:
+        IHSP_t       = SUM(close_i,t) / COUNT(symbols_t)
+        changes_t    = AVERAGE( (close_i,t - close_i,t-1) / close_i,t-1 * 100 )
+
+    Args:
+        start_date: Start date 'YYYY-MM-DD'
+        end_date:   End date 'YYYY-MM-DD'
+
+    Returns:
+        DataFrame dengan kolom: date, close, previous_close, changes.
+        Empty jika tidak ada data.
+    """
+    # Ambil data dari H-1 agar perubahan hari pertama bisa dihitung
+    fetch_start = (datetime.strptime(start_date, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+    df = get_all_stock_data_except_jkse(fetch_start, end_date)
+
+    if df.empty:
+        print("  WARNING: Tidak ada data untuk menghitung IHSP")
+        return pd.DataFrame()
+
+    # Group by date: rata-rata close & jumlah volume dari semua simbol
+    ihsp_df = df.groupby('date', as_index=False).agg(
+        close=('close', 'mean'),
+        volume=('volume', 'sum'),
+    )
+    ihsp_df = ihsp_df.sort_values('date')
+
+    # Hitung previous_close (nilai IHSP hari sebelumnya)
+    ihsp_df['previous_close'] = ihsp_df['close'].shift(1)
+
+    # Hitung changes: rata-rata %change per-ticker per hari
+    # Step 1: untuk setiap ticker, hitung %change harian
+    symbols = df['symbol'].unique()
+    change_frames = []
+    for sym in symbols:
+        sym_df = df[df['symbol'] == sym].sort_values('date').copy()
+        sym_df['pct'] = sym_df['close'].pct_change() * 100
+        change_frames.append(sym_df[['date', 'pct']])
+
+    # Step 2: rata-rata %change per hari, rounded 2 desimal
+    all_changes = pd.concat(change_frames)
+    daily_avg_change = all_changes.groupby('date')['pct'].mean().round(2)
+    ihsp_df['changes'] = ihsp_df['date'].map(daily_avg_change)
+
+    # Filter hanya rentang yang diminta (buang data H-1)
+    start_dt = pd.to_datetime(start_date)
+
+    # Forward-fill: jika start_date tidak ada data (hari libur/weekend),
+    # gunakan data H-1 agar chart tetap dimulai dari tanggal yang diminta
+    if start_dt not in ihsp_df['date'].values:
+        prev_rows = ihsp_df[ihsp_df['date'] < start_dt]
+        if not prev_rows.empty:
+            fill_row = prev_rows.iloc[-1:].copy()
+            fill_row['date'] = start_dt
+            fill_row['previous_close'] = None
+            fill_row['changes'] = None
+            ihsp_df = pd.concat([fill_row, ihsp_df], ignore_index=True).sort_values('date')
+
+    ihsp_df = ihsp_df[ihsp_df['date'] >= start_dt].copy()
+
+    # Simpan ke stock_simulate_data dengan simbol ^PEARL
+    save_simulate_data(ihsp_df, '^PEARL')
+
+    print(f"  IHSP (^PEARL) calculated and saved: {len(ihsp_df)} rows")
+    return ihsp_df

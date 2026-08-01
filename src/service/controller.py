@@ -69,8 +69,9 @@ def resolve_dates(
 # ---------------------------------------------------------------------------
 
 def run(
-    tickers: List[str],
-    date_mode: str,
+    tickers: List[str] = None,
+    is_ihsp_mode: bool = False,
+    date_mode: str = None,
     date_start: str = None,
     date_end: str = None,
     interval_days: int = None,
@@ -80,7 +81,8 @@ def run(
     Execute the full application pipeline.
 
     Args:
-        tickers:       List of ticker symbols
+        tickers:       List of ticker symbols (None for IHSP mode)
+        is_ihsp_mode:  If True, run IHSP (^PEARL) vs IHSG (^JKSE) mode
         date_mode:     'date', 'interval', or 'period'
         date_start:    Start date 'DD/MM/YYYY' (date mode)
         date_end:      End date 'DD/MM/YYYY' (date mode)
@@ -95,7 +97,140 @@ def run(
     start_date, end_date = resolve_dates(date_mode, date_start, date_end,
                                          interval_days, period)
     print(f"\nDate range: {start_date} -> {end_date}")
-    print(f"Tickers   : {', '.join(tickers)}")
+    if not is_ihsp_mode:
+        print(f"Tickers   : {', '.join(tickers)}")
+
+    # ── IHSP Mode: IHSP (^PEARL) vs IHSG (^JKSE) ──────────────────────
+    if is_ihsp_mode:
+        print("\n-- IHSP Mode: IHSP (^PEARL) vs IHSG (^JKSE) --")
+
+        # Step IHSP-1: Initialise database (both tables)
+        print("\n-- Initialising database --")
+        db.init_db()
+        db.init_simulate_table()
+
+        # Step IHSP-2: Fetch missing data for all symbols + ^JKSE
+        print("\n-- Checking / fetching data for all symbols + ^JKSE --")
+        symbols = db.get_all_symbols_except_jkse()
+        all_tickers = symbols + ['^JKSE']
+        print(f"  Found {len(symbols)} symbols (excl. ^JKSE) + ^JKSE = {len(all_tickers)} total")
+
+        # Extend fetch range 1 day back so H-1 is always available for forward-fill
+        from datetime import datetime as dt, timedelta as td
+        fetch_start = (dt.strptime(start_date, '%Y-%m-%d') - td(days=1)).strftime('%Y-%m-%d')
+
+        for ticker in all_tickers:
+            print(f"\n  [{ticker}]")
+
+            # Always fetch fresh data for -x mode (skip cache shortcut).
+            # Check what's already in DB and only fetch missing ranges.
+            existing_df = db.get_stock_data(ticker, fetch_start, end_date)
+            if not existing_df.empty:
+                missing_ranges = db.find_missing_date_ranges(existing_df, fetch_start, end_date)
+                if missing_ranges:
+                    print(f"    >> Data parsial ({len(existing_df)} rows), fetching {len(missing_ranges)} missing range(s)...")
+                    for miss_start, miss_end in missing_ranges:
+                        print(f"    >> Fetch missing: {miss_start} to {miss_end}")
+                        partial_df = yahoo_service.fetch_yfinance_data(ticker, miss_start, miss_end)
+                        if not partial_df.empty:
+                            db.save_stock_data(partial_df, ticker)
+                        else:
+                            print(f"    >> WARNING: No data for {miss_start} to {miss_end}")
+                else:
+                    print(f"    >> Data lengkap ({len(existing_df)} rows) — tidak ada yang perlu di-fetch")
+            else:
+                print(f"    >> Tidak ada data — fetch dari Yahoo Finance...")
+                yf_df = yahoo_service.fetch_yfinance_data(ticker, fetch_start, end_date)
+                if yf_df.empty:
+                    print(f"    >> WARNING: Tidak ada data untuk {ticker}")
+                    continue
+                db.save_stock_data(yf_df, ticker)
+
+        # Step IHSP-3: Calculate & save IHSP from all symbols except ^JKSE
+        print("\n-- Calculating IHSP from all symbols (except ^JKSE) --")
+        ihsp_df = db.calculate_and_save_ihsp(start_date, end_date)
+
+        if ihsp_df.empty:
+            print("\nERROR: Gagal menghitung IHSP. Pastikan data stock_data tersedia. Exiting.")
+            return
+
+        # Step IHSP-4: Load IHSG (^JKSE) data from stock_data
+        print("\n-- Loading IHSG (^JKSE) data --")
+        jkse_df = db.get_stock_data('^JKSE', start_date, end_date)
+
+        if jkse_df.empty:
+            print("\nERROR: Tidak ada data IHSG (^JKSE) di database. Exiting.")
+            return
+
+        # Step IHSP-5: Prepare data for chart
+        print("\n-- Preparing data for IHSP vs IHSG chart --")
+
+        # Rename columns for chart compatibility (chart expects 'Date' and 'Close_IDR')
+        ihsp_chart = ihsp_df.copy()
+        ihsp_chart = ihsp_chart.rename(columns={'date': 'Date', 'close': 'Close_IDR'})
+
+        jkse_chart = jkse_df.copy()
+        if 'date' in jkse_chart.columns and 'Date' not in jkse_chart.columns:
+            jkse_chart = jkse_chart.rename(columns={'date': 'Date'})
+        if 'close' in jkse_chart.columns and 'Close_IDR' not in jkse_chart.columns:
+            jkse_chart = jkse_chart.rename(columns={'close': 'Close_IDR'})
+
+        # Align dates: only keep dates present in BOTH datasets
+        ihsp_dates = set(ihsp_chart['Date'].dt.date)
+        jkse_dates = set(jkse_chart['Date'].dt.date)
+        common_dates = sorted(ihsp_dates & jkse_dates)
+
+        if not common_dates:
+            print("\nERROR: Tidak ada tanggal yang sama antara IHSP dan IHSG. Exiting.")
+            return
+
+        ihsp_chart = ihsp_chart[ihsp_chart['Date'].dt.date.isin(common_dates)].reset_index(drop=True)
+        jkse_chart = jkse_chart[jkse_chart['Date'].dt.date.isin(common_dates)].reset_index(drop=True)
+
+        print(f"  Aligned data: {len(common_dates)} common dates from "
+              f"{common_dates[0].strftime('%d/%m/%Y')} to {common_dates[-1].strftime('%d/%m/%Y')}")
+
+        chart_data = {
+            '^PEARL': ihsp_chart,
+            '^JKSE': jkse_chart,
+        }
+
+        # Step IHSP-6: Generate output
+        output_dir = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "output"
+        )
+        os.makedirs(output_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        png_path = os.path.join(output_dir, f"chart_ihsp_vs_ihsg_{timestamp}.png")
+        mp4_path = os.path.join(output_dir, f"chart_ihsp_vs_ihsg_{timestamp}.mp4")
+
+        # 6a. Static PNG — with custom IHSP title
+        print("\n-- Generating IHSP vs IHSG static PNG chart --")
+        try:
+            dates_list = ihsp_chart['Date'].tolist()
+            date_range_str = f"{dates_list[0].strftime('%d %b %Y')} - {dates_list[-1].strftime('%d %b %Y')}"
+            chart.generate_png_chart(chart_data, png_path, title_lines=[
+                "IHSP (^PEARL)  vs  IHSG (^JKSE)",
+                date_range_str,
+                None,  # Auto-calculate leading performer
+            ])
+        except Exception as e:
+            print(f"  ERROR generating PNG: {e}")
+
+        # 6b. Animated MP4
+        print("\n-- Generating IHSP vs IHSG animated MP4 chart --")
+        try:
+            chart.generate_mp4_animation(chart_data, mp4_path)
+        except Exception as e:
+            print(f"  ERROR generating MP4: {e}")
+            print("  Make sure ffmpeg is installed: https://ffmpeg.org/download.html")
+
+        print("\n" + "=" * 60)
+        print("  IHSP vs IHSG — Done!")
+        print("=" * 60)
+        return
 
     # -- Step 2: Initialise database --
     print("\n-- Initialising database --")

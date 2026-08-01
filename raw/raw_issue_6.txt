@@ -1,0 +1,17 @@
+buatkan `issue_6.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. enhance logic untuk pengambilan data dan menyimpannya ke database.
+2. jika data sudah tersedia maka ambil dari database, jika data belum tersedia maka fetch data pada `yfinance`.
+
+project ini ditujukan untuk enhance logic apps :
+1. apabila data sudah tersedia pada database, maka gunakan data tersebut.
+2. apabila data belum tersedia pada database, maka fetch data dan kemudian input ke dalam database.
+3. database yang digukana untuk proses penyimpanan yaitu `stock_data`.
+4. lakukan test juga menggunakan data lama seperti 2024 atau 2025 sebagai bahan uji coba.
+
+output : enhange logic apps
+
+response : enhance logic apps
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah

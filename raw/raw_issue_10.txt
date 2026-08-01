@@ -1,0 +1,20 @@
+buatkan `issue_10.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. enhance untuk visualisasi chart imagenya `.png`
+2. pada visualisasi chart image `.png` hilangkan background colornya
+3. pada visualisasi chart image `.png` hilangkan legend
+4. pada visualisasi chart image `.png` gunakan warna yang berbeda dari `.mp4`. untuk warnanya seperti ini "#FF0509", "#F0B90A", "##617DE9", "#00AAE3", "#13F194", "#3CC6E6".
+5. pada visualisasi chart image `.png` tambahkan "point" diharga tertingginya dari list yang disebutkan. hanya yang disebutkan saja!
+6. pada visualisasi chart image `.png` untuk X axisnya jadikan horizontal text jangan miring seperti itu
+7. pada visualisasi chart image `.png` hapus text di title semuanya
+8. pada visualisasi chart image `.png` untuk seluruh textnya gunakan color #f2eae5
+
+
+project ini ditujukan untuk enhance visualisasi chart image `.png`
+
+output : enhance visualisasi image `.png` tanpa merubah format `.mp4`
+
+response : -
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah

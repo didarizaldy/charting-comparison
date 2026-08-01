@@ -293,7 +293,11 @@ def create_static_chart(
     plt.close()
 
 
-def generate_png_chart(df_dict: Dict[str, pd.DataFrame], output_path: str) -> None:
+def generate_png_chart(
+    df_dict: Dict[str, pd.DataFrame],
+    output_path: str,
+    title_lines: Optional[List[str]] = None,
+) -> None:
     """
     Generate a static PNG comparison chart.
 
@@ -302,8 +306,9 @@ def generate_png_chart(df_dict: Dict[str, pd.DataFrame], output_path: str) -> No
     Args:
         df_dict:     Dict of ticker → DataFrame with 'Date' and 'Close_IDR' columns
         output_path: File path where the PNG will be saved
+        title_lines: Optional 3-element list of custom title strings
     """
-    create_static_chart(df_dict, output_path)
+    create_static_chart(df_dict, output_path, title_lines=title_lines)
 
 
 # ---------------------------------------------------------------------------

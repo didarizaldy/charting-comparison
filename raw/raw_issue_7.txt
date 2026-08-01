@@ -1,0 +1,15 @@
+buatkan `issue_7.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. perubahan DBMS menjadi ke MySQL
+
+project ini ditujukan untuk pengubahan DBMS ke MySQL :
+1. lakukan perubahan dari database existing menjadi ke MySQL.
+2. user root, password root, database `stock_data`
+3. untuk seluruh structure table sudah tersedia sehingga tidak perlu perubahan structure baik itu penambahan maupun pengurangan.
+
+output : migrasi DBMS
+
+response : migrasi DBMS
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah

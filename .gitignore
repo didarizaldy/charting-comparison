@@ -44,3 +44,7 @@ desktop.ini
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Ouput files (generated charts)
+output/*.png
+output/*.mp4

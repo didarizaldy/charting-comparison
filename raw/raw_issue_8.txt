@@ -1,0 +1,18 @@
+buatkan `issue_8.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. menambahkan arguments `-x` dan dapat dikombinasikan pada seluruh arguments. fungsinya yaitu sebagai pengganti dari `-t`. apabila user telah menginputkan `-x` maka `-t` tidak dapat digunakan. contoh benar `python main.py -x -d 14/07/2026 30/07/2026`, contoh salah `python -x -t BMRI.JK 14/07/2026 30/07/2026`.
+2. argumkens `-x` yaitu untuk memproyeksikan atau visualisasi "IHSP vs IHSG" pada chart.
+3. arguemtns `-x` berisikan semua symbol yang terdaftar pada table `stock_data` terkecuali `^JKSE`.
+4. arguments `-x` yaitu mengambil kombinasi dari keseluruhan ticker pada table `stock_data` dan menggabungkannya menjadi satu kesatuan data kecuali `^JKSE`.
+5. arguments `-x` digunakan untuk memvisualisasikan `IHSP (Indeks Harga Saham Pearl)` vs `IHSG (IDX Composite / ^JKSE)` pada animation chart `.mp4` dan juga `.png`
+6. arguments `-x` memvisualisasikan hanya 2 chart yaitu `IHSP (Indeks Harga Saham Pearl)` vs `IHSG (IDX Composite / ^JKSE)`. dimana IHSP berisikan seluruh symbol pada table `stock_list` terkecuali `^JKSE` dan menggabungkannya
+7. untuk data pada arguments `-x` bisa disimpan pada table `stock_simulate_data` dengan symbol custom yaitu `^PEARL` dan menyimpannya sesuai dengan table dimana per hari. contoh : gabungan dari keseluruhan symbol pada table `stock_data` kecuali `^JKSE` dijumlahkan pada satu hari.
+
+project ini ditujukan untuk penambahan arguments dan juga logic baru
+
+output : -
+
+response : setelah arguments ditambahkan lakukan uji test dimulai tanggal 14/07/2026 - 21/07/2026
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah

@@ -1,0 +1,13 @@
+buatkan `issue_9.md` yang berisi perencanaan untuk nanti dimplementasikan oleh junior programmer atau AI model yang lebih murah.
+
+isi dari planning nya adalah sebagai berikut :
+1. menambahkan field dengan nama `changes` pada table `stock_data` dan juga `stock_simulate_data` letakan diantara field `volume` dan juga `created_at`.
+2. untuk logic pada field `changes` yaitu menghitung perubahan berdasrkan % pada tanggal sebelumnya
+
+project ini ditujukan untuk penambahan logic baru
+
+output : enhance database
+
+response : setelah ditambahkan lakukan uji test dimulai tanggal 14/07/2026 - 30/07/2026
+
+jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimpelmentasikan adalah junior programmer atau model AI yang lebih murah
